@@ -10,6 +10,8 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Write};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -263,8 +265,9 @@ pub struct Cmd {
     args: Vec<OsString>,
     vars: HashMap<String, String>,
     redirects: Vec<Redirect>,
-
     // for running
+    #[cfg(target_os = "windows")]
+    creation_flags: Option<u32>,
     std_cmd: Option<Command>,
     stdin_redirect: Option<CmdIn>,
     stdout_redirect: Option<CmdOut>,
@@ -286,6 +289,8 @@ impl Default for Cmd {
             stderr_redirect: None,
             stdout_logging: None,
             stderr_logging: None,
+            #[cfg(target_os = "windows")]
+            creation_flags: None,
         }
     }
 }
@@ -321,6 +326,12 @@ impl Cmd {
 
     pub fn add_redirect(mut self, redirect: Redirect) -> Self {
         self.redirects.push(redirect);
+        self
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn add_creation_flags(mut self, flag: u32) -> Self {
+        self.creation_flags = Some(flag);
         self
     }
 
@@ -362,6 +373,10 @@ impl Cmd {
             cmd.args(&args[1..]);
             for (k, v) in self.vars.iter() {
                 cmd.env(k, v);
+            }
+            #[cfg(target_os = "windows")]
+            if let Some(flags) = self.creation_flags {
+                cmd.creation_flags(flags);
             }
             self.std_cmd = Some(cmd);
         }
